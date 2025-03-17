@@ -1,0 +1,156 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: external-dns
+  namespace: cert-manager
+spec:
+  interval: 5m
+  url: https://kubernetes-sigs.github.io/external-dns/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-dns
+  namespace: cert-manager
+spec:
+  interval: 10m
+  timeout: 5m
+  chart:
+    spec:
+      chart: external-dns
+      version: '1.15.2'
+      sourceRef:
+        kind: HelmRepository
+        name: external-dns
+      interval: 5m
+  releaseName: external-dns-cloudflare
+  values:
+    provider: 
+      name: cloudflare
+    domainsFilters:
+      - danstechjourney.com
+    env:
+      - name: CF_API_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: cloudflare-api-token
+            key: cloudflare-api-key
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: pihole-spc
+  namespace: cert-manager
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: pihole
+    type: Opaque
+    data: 
+    - objectName: pihole-password
+      key: EXTERNAL_DNS_PIHOLE_PASSWORD  
+    - objectName: pihole-host
+      key: EXTERNAL_DNS_PIHOLE_SERVER      
+    - objectName: pihole-skip-verify
+      key: EXTERNAL_DNS_PIHOLE_TLS_SKIP_VERIFY             
+  parameters:                                 
+    roleName: "${cluster_name}-cert-manager-external-dns-pihole-pihole"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-external-dns-pihole"
+        objectName: "pihole-password"
+        secretKey: "admin-password"
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-external-dns-pihole"
+        objectName: "pihole-host"
+        secretKey: "hostip"
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-external-dns-pihole"
+        objectName: "pihole-skip-verify"
+        secretKey: "skip-verify"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-dns-pihole
+  namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-dns-pihole
+rules:
+- apiGroups: [""]
+  resources: ["services","endpoints","pods"]
+  verbs: ["get","watch","list"]
+- apiGroups: ["extensions","networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get","watch","list"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-dns-pihole-viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-dns-pihole
+subjects:
+- kind: ServiceAccount
+  name: external-dns-pihole
+  namespace: cert-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns-pihole
+  namespace: cert-manager
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: external-dns-pihole
+  template:
+    metadata:
+      labels:
+        app: external-dns-pihole
+    spec:
+      serviceAccountName: external-dns-pihole
+      containers:
+      - name: external-dns-pihole
+        image: registry.k8s.io/external-dns/external-dns:v0.15.1
+        # If authentication is disabled and/or you didn't create
+        # a secret, you can remove this block.
+        envFrom:
+        - secretRef:
+            # Change this if you gave the secret a different name
+            name: pihole
+        args:
+        - --source=service
+        - --source=ingress
+        # Pihole only supports A/AAAA/CNAME records so there is no mechanism to track ownership.
+        # You don't need to set this flag, but if you leave it unset, you will receive warning
+        # logs when ExternalDNS attempts to create TXT records.
+        - --registry=noop
+        # IMPORTANT: If you have records that you manage manually in Pi-hole, set
+        # the policy to upsert-only so they do not get deleted.
+        - --policy=upsert-only
+        - --provider=pihole
+        - --domain-filter=${pihole_domain_filter}
+        # Change this to the actual address of your Pi-hole web server
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/secrets"
+          readOnly: true
+      volumes:
+      - name: secrets-store-inline
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "pihole-spc"
+      securityContext:
+        fsGroup: 65534 # For ExternalDNS to be able to read Kubernetes token files

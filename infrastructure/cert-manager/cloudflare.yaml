@@ -1,0 +1,80 @@
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: cloudflare-spc
+  namespace: cert-manager
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: cloudflare-api-token
+    type: Opaque
+    data: 
+    - objectName: cloudflare-api-key
+      key: cloudflare-api-key                      
+  parameters:                                 
+    roleName: "${cluster_name}-cert-manager-cert-manager-cloudflare-api"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-cert-manager-cloudflare"
+        objectName: "cloudflare-api-key"
+        secretKey: "cloudflare-api-token"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: secret-bind
+  name: secret-bind
+  namespace: cert-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secret-bind
+  template:
+    metadata:
+      labels:
+        app: secret-bind
+    spec:
+      serviceAccountName: cert-manager
+      containers:
+      - image: alpine
+        name: alpine
+        command:
+        - sleep
+        - infinity
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/secrets"
+          readOnly: true
+      volumes:
+      - name: secrets-store-inline
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "cloudflare-spc"
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: cloudflare-issuer
+  namespace: cert-manager
+spec:
+  acme:
+    # You must replace this email address with your own.
+    # Let's Encrypt will use this to contact you about expiring
+    # certificates, and issues related to your account.
+    email: xadlien@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      # Secret resource that will be used to store the account's private key.
+      name: cloudflare-issuer-key
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: cloudflare-api-key

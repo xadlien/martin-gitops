@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vaultwarden
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: cloudflare-spc
+  namespace: vaultwarden
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: cloudflare-api-token
+    type: Opaque
+    data: 
+    - objectName: cloudflare-api-key
+      key: cloudflare-api-key                      
+  parameters:                                 
+    roleName: "${cluster_name}-vaultwarden-vaultwarden-svc-cloudflare-api"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-cert-manager-cloudflare"
+        objectName: "cloudflare-api-key"
+        secretKey: "cloudflare-api-token"
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: vaultwarden-spc-admin
+  namespace: vaultwarden
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: vaultwarden-admin
+    type: Opaque
+    data: 
+    - objectName: vaultwarden-admin
+      key: token                
+  parameters:                                 
+    roleName: "${cluster_name}-vaultwarden-vaultwarden-svc-vaultwarden-admin"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-vaultwarden-admin"
+        objectName: "vaultwarden-admin"
+        secretKey: "token"
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: vaultwarden-spc-smtp
+  namespace: vaultwarden
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: vaultwarden-smtp
+    type: Opaque
+    data: 
+    - objectName: vaultwarden-smtp-username
+      key: username    
+    - objectName: vaultwarden-smtp-password
+      key: password                 
+  parameters:                                 
+    roleName: "${cluster_name}-vaultwarden-vaultwarden-svc-vaultwarden-smtp"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-vaultwarden-smtp"
+        objectName: "vaultwarden-smtp-username"
+        secretKey: "username"
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-vaultwarden-smtp"
+        objectName: "vaultwarden-smtp-password"
+        secretKey: "password"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: secret-bind
+  name: secret-bind
+  namespace: vaultwarden
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secret-bind
+  template:
+    metadata:
+      labels:
+        app: secret-bind
+    spec:
+      serviceAccountName: vaultwarden-svc
+      containers:
+      - image: alpine
+        name: alpine
+        command:
+        - sleep
+        - infinity
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/secrets-cf"
+          readOnly: true
+        - name: vaultwarden-spc-admin
+          mountPath: "/secrets-vwadmin"
+          readOnly: true
+        - name: vaultwarden-spc-smtp
+          mountPath: "/secrets-vwsmtp"
+          readOnly: true
+      volumes:
+      - name: secrets-store-inline
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "cloudflare-spc"
+      - name: vaultwarden-spc-admin
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "vaultwarden-spc-admin"
+      - name: vaultwarden-spc-smtp
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "vaultwarden-spc-smtp"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: warden-tls
+  namespace: vaultwarden
+spec:
+  # Secret names are always required.
+  secretName: warden-tls
+
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+
+  isCA: false
+
+  subject:
+    organizations:
+      - cert-manager
+
+  commonName: ${domain}
+
+  dnsNames:
+    - ${domain}
+
+  issuerRef:
+    name: cluster-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: vaultwarden
+  namespace: vaultwarden
+spec:
+  interval: 5m
+  url: https://guerzon.github.io/vaultwarden
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vaultwarden
+  namespace: vaultwarden
+spec:
+  interval: 10m
+  timeout: 5m
+  chart:
+    spec:
+      chart: vaultwarden
+      version: '0.31.6'
+      sourceRef:
+        kind: HelmRepository
+        name: vaultwarden
+      interval: 5m
+  releaseName: vaultwarden
+  values:
+    adminToken:
+      existingSecret: "vaultwarden-admin"
+      existingSecretKey: "token"
+    smtp:
+      existingSecret: "vaultwarden-smtp"
+      host: smtp.gmail.com
+      security: "starttls"
+      port: 587
+      from: "warden@${domain}"
+      fromName: "warden"
+      username: 
+        existingSecretKey: "username"
+      password:
+        existingSecretKey: "password"
+    storage:
+      data:
+        name: "vaultwarden-data"
+        size: "15Gi"
+        path: "/data"
+        keepPvc: false
+        accessMode: "ReadWriteOnce"
+      attachments:
+        name: "vaultwarden-files"
+        size: "100Gi"
+        path: /files
+        keepPvc: false
+        accessMode: "ReadWriteOnce"
+    domain: "https://${domain}"
+    invitationOrgName: "${org_name}"
+    ingress:
+      enabled: true
+      class: "nginx"
+      nginxIngressAnnotations: true
+      additionalAnnotations: 
+        external-dns.alpha.kubernetes.io/hostname: "${domain}"
+      tls: true
+      hostname: "${domain}"
+      path: "/"
+      pathType: "Prefix"
+      tlsSecret: "warden-tls"
+      nginxAllowList: ""
+

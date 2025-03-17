@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vaultwarden
+  namespace: flux-system
+spec:
+  interval: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: "../../../apps/vaultwarden/"
+  prune: true
+  timeout: 1m
+  postBuild:
+    substitute:
+      domain: warden-dev.martin.lan
+      org_name: martin-house
+      cluster_name: dev

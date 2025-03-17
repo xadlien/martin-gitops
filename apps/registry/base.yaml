@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-svc
+  namespace: registry
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: cloudflare-spc
+  namespace: registry
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: cloudflare-api-token
+    type: Opaque
+    data: 
+    - objectName: cloudflare-api-key
+      key: cloudflare-api-key                      
+  parameters:                                 
+    roleName: "${cluster_name}-registry-registry-svc-cloudflare-api"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-cert-manager-cloudflare"
+        objectName: "cloudflare-api-key"
+        secretKey: "cloudflare-api-token"
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: registry-spc
+  namespace: registry
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: registry
+    type: Opaque
+    data: 
+    - objectName: registry
+      key: htpasswd                    
+  parameters:                                 
+    roleName: "${cluster_name}-registry-registry-svc-registry"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-registry"
+        objectName: "registry"
+        secretKey: "htpasswd"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: registry-tls
+  namespace: registry
+spec:
+  # Secret names are always required.
+  secretName: registry-tls
+
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+
+  isCA: false
+
+  subject:
+    organizations:
+      - cert-manager
+
+  commonName: ${domain}
+
+  dnsNames:
+    - ${domain}
+
+  issuerRef:
+    name: cluster-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: registry
+  name: registry
+  namespace: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      serviceAccountName: registry-svc
+      containers:
+      - image: registry:2
+        name: docker-registry
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/secrets-cf"
+          readOnly: true
+        - name: secrets-store-inline-registry
+          mountPath: "/auth/htpasswd"
+          readOnly: true
+        - name: registry
+          mountPath: /var/lib/registry
+      volumes:
+      - name: secrets-store-inline
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "cloudflare-spc"
+      - name: secrets-store-inline-registry
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "registry-spc"
+      - name: registry
+        persistentVolumeClaim:
+          claimName: registry-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: registry
+  name: registry
+  namespace: registry
+spec:
+  ports:
+  - name: 5000-5000
+    port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: registry
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry
+  namespace: registry
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    external-dns.alpha.kubernetes.io/hostname: "${domain}"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: 600
+    nginx.ingress.kubernetes.io/proxy-send-timeout: 600
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ${domain}
+    http:
+      paths:
+      - backend:
+          service:
+            name: registry
+            port:
+              number: 5000
+        path: /
+        pathType: Prefix
+  tls:
+    - hosts:
+      - ${domain}
+      secretName: registry-tls
