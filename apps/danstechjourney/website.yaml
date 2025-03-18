@@ -45,11 +45,6 @@ spec:
   selector:
     matchLabels:
       app: website
-  strategy:
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -71,11 +66,7 @@ spec:
           mountPath: "/secrets"
           readOnly: true
       dnsPolicy: ClusterFirst
-      imagePullSecrets:
-      - name: regcred
       restartPolicy: Always
-      schedulerName: default-scheduler
-      securityContext: {}
       terminationGracePeriodSeconds: 30
       volumes:
       - name: secrets-store-inline
