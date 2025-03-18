@@ -38,7 +38,6 @@ metadata:
   name: website
   namespace: danstechjourney
 spec:
-  progressDeadlineSeconds: 600
   replicas: 3
   revisionHistoryLimit: 10
   selector:
