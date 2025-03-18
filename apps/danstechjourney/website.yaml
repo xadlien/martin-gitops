@@ -50,7 +50,7 @@ spec:
     spec:
       serviceAccountName: website-svc
       containers:
-      - image: ${image}
+      - image: ${image}:${image_tag}
         imagePullPolicy: Always
         name: danstechjourney
         ports:
@@ -165,3 +165,49 @@ spec:
     - hosts:
       - ${domain}
       secretName: danstechjourney-tls
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: danstechjourney
+  namespace: flux-system
+spec:
+  image: ${image} 
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: danstechjourney
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: danstechjourney
+  policy:
+    numerical:
+      order: asc
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 30m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: fluxcdbot@users.noreply.github.com
+        name: fluxcdbot
+      messageTemplate: '{{range .Changed.Changes}}{{print .OldValue}} -> {{println .NewValue}}{{end}}'
+    push:
+      branch: main
+  update:
+    path: ./clusters/${cluster_name}
+    strategy: Setters
