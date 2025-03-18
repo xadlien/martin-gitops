@@ -68,11 +68,11 @@ spec:
       terminationGracePeriodSeconds: 30
       volumes:
       - name: secrets-store-inline
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: "cloudflare-spc"
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "cloudflare-spc"
 ---
 apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
