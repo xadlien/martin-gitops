@@ -23,7 +23,7 @@ spec:
     - objectName: cloudflare-api-key
       key: cloudflare-api-key                      
   parameters:                                 
-    roleName: "${cluster_name}-vaultwarden-vaultwarden-svc-cloudflare-api"
+    roleName: "${cluster_name}-danstechjourney-website-svc-cloudflare-api"
     vaultAddress: "http://vault.vault.svc.cluster.local:8200"
     objects:  |
       - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-cert-manager-cloudflare"
