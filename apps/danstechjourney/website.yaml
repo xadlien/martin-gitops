@@ -1,0 +1,178 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: danstechjourney
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: website-svc
+  namespace: danstechjourney
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: cloudflare-spc
+  namespace: danstechjourney
+spec:
+  provider: vault     
+  secretObjects:
+  - secretName: cloudflare-api-token
+    type: Opaque
+    data: 
+    - objectName: cloudflare-api-key
+      key: cloudflare-api-key                      
+  parameters:                                 
+    roleName: "${cluster_name}-vaultwarden-vaultwarden-svc-cloudflare-api"
+    vaultAddress: "http://vault.vault.svc.cluster.local:8200"
+    objects:  |
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-cert-manager-cloudflare"
+        objectName: "cloudflare-api-key"
+        secretKey: "cloudflare-api-token"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  labels:
+    app: website
+  name: website
+  namespace: danstechjourney
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 3
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: website
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: website
+    spec:
+      serviceAccountName: website-svc
+      containers:
+      - image: ${image}
+        imagePullPolicy: Always
+        name: danstechjourney
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/secrets"
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: regcred
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "cloudflare-spc"
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: website
+  namespace: danstechjourney
+spec:
+  maxReplicas: 10
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: website
+  targetCPUUtilizationPercentage: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: website
+  name: website
+  namespace: danstechjourney
+spec:
+  ports:
+  - name: 8080-80
+    port: 8080
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: website
+  type: ClusterIP
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: danstechjourney-tls
+  namespace: danstechjourney
+spec:
+  # Secret names are always required.
+  secretName: danstechjourney-tls
+
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+
+  isCA: false
+
+  subject:
+    organizations:
+      - cert-manager
+
+  commonName: ${domain}
+
+  dnsNames:
+    - ${domain}
+
+  issuerRef:
+    name: cloudflare-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: website
+  namespace: danstechjourney
+  annotations:
+    nginx.ingress.kubernetes.io/connection-proxy-header: keep-alive
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-connections: "25"
+    nginx.ingress.kubernetes.io/limit-rps: "15"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1024m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+  - host: ${domain}
+    http:
+      paths:
+      - backend:
+          service:
+            name: website
+            port:
+              number: 8080
+        path: /
+        pathType: Prefix
+  tls:
+    - hosts:
+      - ${domain}
+      secretName: danstechjourney-tls
