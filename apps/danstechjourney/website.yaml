@@ -173,7 +173,7 @@ metadata:
   name: danstechjourney
   namespace: flux-system
 spec:
-  image: ${image} 
+  image: registry.registry:5000/danstechjourney 
   interval: 5m
   insecure: true
 ---
