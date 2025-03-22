@@ -16,5 +16,5 @@ spec:
     substitute:
       domain: danstechjourney.com
       cluster_name: dev
-      image: 'registry-dev.martin.lan:443/danstechjourney' # {"$imagepolicy": "flux-system:danstechjourney:name"}
+      image: 'registry.registry/danstechjourney' # {"$imagepolicy": "flux-system:danstechjourney:name"}
       image_tag: '1742174027' # {"$imagepolicy": "flux-system:danstechjourney:tag"}
