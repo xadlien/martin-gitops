@@ -56,7 +56,12 @@ spec:
         ports:
         - containerPort: 80
           protocol: TCP
-        resources: {}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
