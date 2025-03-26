@@ -16,4 +16,4 @@ spec:
       domain: danstechjourney.com
       cluster_name: dev
       image: 'registry-dev.martin.lan:443/danstechjourney'
-      image_tag: '1742955927' # {"$imagepolicy": "flux-system:danstechjourney:tag"}
+      image_tag: '1743021680' # {"$imagepolicy": "flux-system:danstechjourney:tag"}
