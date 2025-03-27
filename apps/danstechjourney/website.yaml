@@ -48,9 +48,6 @@ spec:
       labels:
         app: website
     spec:
-      securityContext:
-        runAsUser: 101
-        runAsGroup: 101
       containers:
       - image: ${image}:${image_tag}
         imagePullPolicy: Always
@@ -61,7 +58,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 8080
+            port: 80
           initialDelaySeconds: 10
           periodSeconds: 5
         terminationMessagePath: /dev/termination-log
