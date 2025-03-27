@@ -48,6 +48,9 @@ spec:
       labels:
         app: website
     spec:
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
       containers:
       - image: ${image}:${image_tag}
         imagePullPolicy: Always
