@@ -246,3 +246,16 @@ spec:
   update:
     path: ./clusters/${cluster_name}
     strategy: Setters
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secret-bind
+  namespace: danstechjourney
+spec:
+  podSelector:
+    matchLabels:
+      app: secret-bind
+  policyTypes:
+  - Ingress
+---
