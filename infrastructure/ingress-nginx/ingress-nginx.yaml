@@ -35,7 +35,12 @@ spec:
       annotations: 
         ingressclass.kubernetes.io/is-default-class: true
     controller:
+      image:
+        runAsUser: 101
       hostPort:
         enabled: true
+      config:
+        keep-alive: 0
+        keep-alive-requests: 0
     service:
       type: LoadBalancer
