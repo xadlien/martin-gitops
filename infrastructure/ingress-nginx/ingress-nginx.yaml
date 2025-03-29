@@ -40,7 +40,7 @@ spec:
       hostPort:
         enabled: true
       config:
-        keep-alive: 0
-        keep-alive-requests: 0
+        keep-alive: "0"
+        keep-alive-requests: "1"
     service:
       type: LoadBalancer
