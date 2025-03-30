@@ -78,7 +78,7 @@ spec:
   - name: 8080-80
     port: 8080
     protocol: TCP
-    targetPort: 80
+    targetPort: 8080
   selector:
     app: bookstack
   type: ClusterIP
