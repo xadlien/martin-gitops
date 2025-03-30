@@ -22,7 +22,7 @@ spec:
   replicas: 3
 
   galera:
-    enabled: true
+    enabled: false
 
   myCnf: |
     [mariadb]
