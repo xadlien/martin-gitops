@@ -59,6 +59,11 @@ spec:
           value: "1002"
         - name: PGID
           value: "1002"
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mariadb
+              key: appkey
       securityContext:
         fsGroup: 1002
       volumes:

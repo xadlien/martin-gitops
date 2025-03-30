@@ -23,7 +23,9 @@ spec:
     - objectName: database_password
       key: password
     - objectName: database_root_password
-      key: root_password                     
+      key: root_password      
+    - objectName: appkey
+      key: appkey                   
   parameters:                                 
     roleName: "${cluster_name}-bookstack-bookstack-svc-mariadb"
     vaultAddress: "http://vault.vault.svc.cluster.local:8200"
@@ -34,6 +36,9 @@ spec:
       - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-bookstack-mariadb"
         objectName: "database_root_password"
         secretKey: "root_password"
+      - secretPath: "k8s-${cluster_name}/kubernetes-${cluster_name}-bookstack-mariadb"
+        objectName: "appkey"
+        secretKey: "appkey"
 ---
 apiVersion: apps/v1
 kind: Deployment
