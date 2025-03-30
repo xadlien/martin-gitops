@@ -1,92 +1,124 @@
-# apiVersion: autoscaling/v1
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: website
-#   namespace: danstechjourney
-# spec:
-#   maxReplicas: 10
-#   minReplicas: 3
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: website
-#   targetCPUUtilizationPercentage: 80
-# ---
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   labels:
-#     app: website
-#   name: website
-#   namespace: danstechjourney
-# spec:
-#   ports:
-#   - name: 8080-80
-#     port: 8080
-#     protocol: TCP
-#     targetPort: 80
-#   selector:
-#     app: website
-#   type: ClusterIP
-# ---
-# apiVersion: cert-manager.io/v1
-# kind: Certificate
-# metadata:
-#   name: danstechjourney-tls
-#   namespace: danstechjourney
-# spec:
-#   # Secret names are always required.
-#   secretName: danstechjourney-tls
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bookstack-pvc
+  namespace: bookstack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bookstack
+  name: bookstack
+  namespace: bookstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bookstack
+  template:
+    metadata:
+      labels:
+        app: bookstack
+    spec:
+      containers:
+      - image: lscr.io/linuxserver/bookstack:latest
+        name: bookstack
+        volumeMounts:
+        - name: bookstack-pv
+          mountPath: "/config"
+        ports:
+        - containerPort: 80
+          protocol: TCP
+      securityContext:
+        fsGroup: 1002
+      volumes:
+      - name: bookstack-pv
+        persistentVolumeClaim:
+          claimName: bookstack-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: bookstack
+  name: bookstack
+  namespace: bookstack
+spec:
+  ports:
+  - name: 8080-80
+    port: 8080
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: bookstack
+  type: ClusterIP
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bookstack-tls
+  namespace: bookstack
+spec:
+  # Secret names are always required.
+  secretName: bookstack-tls
 
-#   duration: 2160h # 90d
-#   renewBefore: 360h # 15d
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
 
-#   isCA: false
+  isCA: false
 
-#   subject:
-#     organizations:
-#       - cert-manager
+  subject:
+    organizations:
+      - cert-manager
 
-#   commonName: ${domain}
+  commonName: ${domain}
 
-#   dnsNames:
-#     - ${domain}
+  dnsNames:
+    - ${domain}
 
-#   issuerRef:
-#     name: cloudflare-issuer
-#     kind: ClusterIssuer
-#     group: cert-manager.io
-# ---
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: website
-#   namespace: danstechjourney
-#   annotations:
-#     nginx.ingress.kubernetes.io/connection-proxy-header: keep-alive
-#     nginx.ingress.kubernetes.io/enable-cors: "true"
-#     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-#     nginx.ingress.kubernetes.io/limit-connections: "25"
-#     nginx.ingress.kubernetes.io/limit-rps: "5"
-#     nginx.ingress.kubernetes.io/proxy-body-size: 1024m
-#     nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
-#     nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
-#     nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
-#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-# spec:
-#   ingressClassName: nginx
-#   rules:
-#   - host: ${domain}
-#     http:
-#       paths:
-#       - backend:
-#           service:
-#             name: website
-#             port:
-#               number: 8080
-#         path: /
-#         pathType: Prefix
-#   tls:
-#     - hosts:
-#       - ${domain}
-#       secretName: danstechjourney-tls
+  issuerRef:
+    name: cluster-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bookstack
+  namespace: bookstack
+  annotations:
+    nginx.ingress.kubernetes.io/connection-proxy-header: keep-alive
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-connections: "25"
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1024m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ${domain}
+    http:
+      paths:
+      - backend:
+          service:
+            name: bookstack
+            port:
+              number: 8080
+        path: /
+        pathType: Prefix
+  tls:
+    - hosts:
+      - ${domain}
+      secretName: bookstack-tls

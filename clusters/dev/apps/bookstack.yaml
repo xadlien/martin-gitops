@@ -14,3 +14,4 @@ spec:
   postBuild:
     substitute:
       cluster_name: dev
+      domain: bookstack-dev.martin.lan
