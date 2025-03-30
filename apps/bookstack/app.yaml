@@ -64,6 +64,17 @@ spec:
             secretKeyRef:
               name: mariadb
               key: appkey
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          successThreshold: 3
+          terminationGracePeriodSeconds: 300
       securityContext:
         fsGroup: 1002
       volumes:
