@@ -54,11 +54,7 @@ spec:
         - name: APP_URL
           value: https://${domain}
         - name: TZ
-          value: Etc/EST
-        - name: PUID
-          value: "1002"
-        - name: PGID
-          value: "1002"
+          value: Etc/UTC
         - name: APP_KEY
           valueFrom:
             secretKeyRef:
