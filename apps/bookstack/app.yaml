@@ -48,7 +48,7 @@ spec:
         - name: DB_HOST
           value: mariadb-galera.bookstack
         - name: DB_PORT
-          value: 3306
+          value: "3306"
         - name: DB_DATABASE
           value: bookstack
         - name: APP_URL
@@ -56,9 +56,9 @@ spec:
         - name: TZ
           value: Etc/EST
         - name: PUID
-          value: 1002
+          value: "1002"
         - name: PGID
-          value: 1002
+          value: "1002"
       securityContext:
         fsGroup: 1002
       volumes:
