@@ -35,7 +35,7 @@ spec:
         - name: bookstack-pv
           mountPath: "/config"
         ports:
-        - containerPort: 80
+        - containerPort: 8080
           protocol: TCP
         env:
         - name: DB_PASSWORD
