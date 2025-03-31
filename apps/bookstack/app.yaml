@@ -59,6 +59,8 @@ spec:
           value: https://${domain}
         - name: TZ
           value: Etc/UTC
+        - name: APP_DEBUG
+          value: "true"
         - name: APP_KEY
           valueFrom:
             secretKeyRef:
@@ -67,10 +69,6 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 10
           successThreshold: 3
-      securityContext:
-        fsGroup: 1001
-        runAsUser: 1001
-        runAsGroup: 1001
       volumes:
       - name: bookstack-pv
         persistentVolumeClaim:
