@@ -70,7 +70,6 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 10
           successThreshold: 3
-          terminationGracePeriodSeconds: 300
       securityContext:
         fsGroup: 1002
       volumes:
